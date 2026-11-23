@@ -1,0 +1,938 @@
+<!DOCTYPE html><html class="dark" lang="id" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>HYDRO-FLOW // Smart Water Level &amp; Pump SCADA Dashboard</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            surface: "#0b0f17",
+            "surface-card": "#111724",
+            "surface-elevated": "#172033",
+            "surface-border": "#1e293b",
+            primary: "#38bdf8",
+            "primary-glow": "rgba(56, 189, 248, 0.25)",
+            accent: "#00f0ff",
+            emerald: "#10b981",
+            "emerald-glow": "rgba(16, 185, 129, 0.25)",
+            amber: "#f59e0b",
+            rose: "#f43f5e"
+          },
+          fontFamily: {
+            sans: ["Inter", "sans-serif"],
+            mono: ["JetBrains Mono", "monospace"],
+            display: ["Space Grotesk", "sans-serif"]
+          }
+        }
+      }
+    }
+  </script>
+<!-- Firebase Realtime Database SDK (Compat v8) -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+      font-size: 20px;
+      line-height: 1;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    /* Sleek gradient background grid */
+    .mesh-ambient {
+      background-radial: radial-gradient(circle at 20% 15%, rgba(14, 165, 233, 0.08) 0%, transparent 40%),
+                         radial-gradient(circle at 80% 80%, rgba(16, 185, 129, 0.06) 0%, transparent 50%);
+    }
+    .grid-lines {
+      background-size: 32px 32px;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    }
+    /* Liquid Wave Animations */
+    @keyframes wave-flow {
+      0% { transform: translateX(0); }
+      50% { transform: translateX(-25%); }
+      100% { transform: translateX(0); }
+    }
+    .wave-animate-fast {
+      animation: wave-flow 4s ease-in-out infinite;
+    }
+    .wave-animate-slow {
+      animation: wave-flow 7s ease-in-out infinite reverse;
+    }
+    /* Rotating pump animation */
+    @keyframes spin-smooth {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .pump-spinning {
+      animation: spin-smooth 1.8s linear infinite;
+    }
+    /* Glassmorphism Tank Body */
+    .glass-tank {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
+      box-shadow: inset 0 0 25px rgba(0, 240, 255, 0.06), 0 8px 32px rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(10px);
+    }
+    /* Smooth custom slider */
+    input[type=range]::-webkit-slider-thumb {
+      height: 18px;
+      width: 18px;
+      border-radius: 50%;
+      background: #38bdf8;
+      border: 2px solid #ffffff;
+      cursor: pointer;
+      -webkit-appearance: none;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.8);
+      transition: transform 0.1s ease;
+    }
+    input[type=range]::-webkit-slider-thumb:hover {
+      transform: scale(1.18);
+    }
+    html {
+      scroll-behavior: smooth;
+    }
+  </style>
+</head>
+<body class="bg-surface text-slate-100 font-sans antialiased min-h-screen flex flex-col mesh-ambient grid-lines selection:bg-primary/30">
+<!-- ========================================================================= -->
+<!-- 1. MODERN SLEEK HEADER                                                    -->
+<!-- ========================================================================= -->
+<header class="h-16 px-5 lg:px-8 border-b border-surface-border bg-surface-card/80 backdrop-blur-md sticky top-0 z-40 flex items-center justify-between">
+<!-- Brand / Node Status -->
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-600 to-cyan-400 p-0.5 shadow-lg shadow-sky-500/20">
+<div class="w-full h-full bg-surface-card rounded-[10px] flex items-center justify-center">
+<span class="material-symbols-outlined text-cyan-400" style="font-size: 22px;">water_ec</span>
+</div>
+</div>
+<div>
+<div class="flex items-center gap-2">
+<span class="font-display font-bold tracking-tight text-white text-base lg:text-lg">HYDRO-FLOW</span>
+<span class="px-2 py-0.5 rounded text-[10px] font-mono font-semibold tracking-wider bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">TK-01 CORE</span>
+</div>
+<div class="flex items-center gap-2 text-xs text-slate-400 font-mono">
+<span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald animate-pulse"></span>
+<span class="">PLC ONLINE • STASIUN-PLTA #4</span>
+</div>
+</div>
+</div>
+<!-- Center Navigation Tabs (Clean & Minimal) -->
+<nav class="hidden md:flex items-center gap-1 bg-surface-elevated/70 p-1 rounded-xl border border-surface-border/60 text-xs font-medium">
+<button class="px-3.5 py-1.5 rounded-lg bg-sky-500/15 text-sky-400 font-semibold border border-sky-500/30 transition-all flex items-center gap-1.5" onclick="scrollToSection('tank-section')">
+<span class="material-symbols-outlined" style="font-size: 16px;">dashboard</span>
+<span class="">Monitoring</span>
+</button>
+<button class="px-3.5 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all flex items-center gap-1.5" onclick="scrollToSection('pump-section')">
+<span class="material-symbols-outlined" style="font-size: 16px;">tune</span>
+<span class="">Kontrol Pompa</span>
+</button>
+<button class="px-3.5 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all flex items-center gap-1.5" onclick="scrollToSection('history-section')">
+<span class="material-symbols-outlined" style="font-size: 16px;">analytics</span>
+<span class="">Histori Log</span>
+</button>
+</nav>
+<!-- Header Actions -->
+<div class="flex items-center gap-3">
+<!-- Auto / Manual Mode Badge (Safety Interlock Protected) -->
+<button class="px-3 py-1.5 rounded-lg text-xs font-mono font-medium flex items-center gap-2 bg-emerald/10 border border-emerald/30 text-emerald hover:bg-emerald/20 transition-all cursor-pointer shadow-[0_0_12px_rgba(16,185,129,0.15)]" id="header-mode-toggle" onclick="showControlLockedNotice('Mode Toggle AUTO/MANUAL')" title="Mode Operasi Monitoring IoT">
+<span class="material-symbols-outlined text-emerald" style="font-size: 16px;">hdr_auto</span>
+<span id="header-mode-text" class="">AUTO MODE</span>
+</button>
+<!-- Emergency Cutoff Button (Locked for Safety) -->
+<button class="px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-rose/10 hover:bg-rose/20 text-rose border border-rose/30 flex items-center gap-1.5 transition-all shadow-[0_0_15px_rgba(244,63,94,0.15)] active:scale-95" onclick="showControlLockedNotice('Emergency Stop (E-STOP)')" title="Kontrol fisik dinonaktifkan demi keselamatan operasional">
+<span class="material-symbols-outlined" style="font-size: 16px;">emergency</span>
+<span class="hidden sm:inline">E-STOP</span>
+</button>
+<!-- Profile Avatar -->
+<div class="w-8 h-8 rounded-lg bg-surface-elevated border border-surface-border flex items-center justify-center text-xs font-mono font-bold text-sky-400" title="Operator Konsol Utama">
+        OP-3
+      </div>
+</div>
+</header>
+<!-- ========================================================================= -->
+<!-- 2. MAIN APPLICATION CONTENT                                               -->
+<!-- ========================================================================= -->
+<main class="flex-1 px-4 lg:px-8 py-6 max-w-7xl mx-auto w-full space-y-6">
+<!-- FAST INTERACTIVE SIMULATION & CONTROLLER STRIP -->
+<section class="bg-surface-card border border-surface-border/80 rounded-2xl p-4 shadow-xl flex flex-col md:flex-row items-center justify-between gap-4">
+<div class="flex items-center gap-3 w-full md:w-auto">
+<div class="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 shrink-0">
+<span class="material-symbols-outlined">sensors</span>
+</div>
+<div>
+<div class="text-xs uppercase font-mono tracking-wider text-slate-400">Stream Telemetri Real-Time</div>
+<div class="text-sm font-semibold text-white">Monitoring Sensor level_air &amp; Level_sensor</div>
+</div>
+</div>
+<!-- Live Telemetry Stream Indicator -->
+<div class="w-full md:max-w-md flex items-center gap-3 px-2">
+<span class="text-xs font-mono text-slate-500">Min</span>
+<input class="w-full h-2 bg-surface-elevated rounded-lg appearance-none cursor-not-allowed border border-surface-border opacity-70" disabled id="level-slider" max="500" min="0" step="1" type="range" value="345">
+<span class="text-xs font-mono text-slate-500">Max</span>
+<span class="min-w-[60px] text-center font-mono font-bold text-xs px-2 py-1 rounded-md bg-cyan-500/15 border border-cyan-500/40 text-cyan-300" id="slider-pill">LIVE</span>
+</div>
+<!-- Live Telemetry Tag -->
+<div class="flex items-center gap-2 w-full md:w-auto justify-end">
+<span class="text-xs font-mono px-3 py-1.5 rounded-lg bg-surface-elevated border border-surface-border text-slate-300 flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+<span class="text-[11px] font-semibold text-cyan-300">LIVE IOT STREAM</span>
+</span>
+</div>
+</section>
+<!-- ======================================================================= -->
+<!-- PRIMARY BENTO GRID: TANK VISUALIZER + PUMP ACTUATOR                    -->
+<!-- ======================================================================= -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+<!-- 2.1 MODERN 3D GLASSPHORPHISM TANK CARD (Span 6) -->
+<section class="lg:col-span-6 bg-surface-card border border-surface-border/80 rounded-2xl p-6 shadow-2xl flex flex-col justify-between relative overflow-hidden" id="tank-section">
+<!-- Ambient corner glow -->
+<div class="absolute -top-16 -left-16 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+<div>
+<!-- Card Header -->
+<div class="flex items-center justify-between pb-4 border-b border-surface-border">
+<div class="flex items-center gap-2.5">
+<span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
+<h2 class="font-display font-bold text-white text-base tracking-wide">TANGKI AIR</h2>
+</div>
+<!-- Dynamic State Badge (reflects Level_sensor/condition) -->
+<span class="px-3 py-1 rounded-full text-xs font-medium font-mono border bg-cyan-500/10 text-cyan-300 border-cyan-500/30" id="tank-status-badge">Menghubungkan...</span>
+</div>
+<!-- Big Stat & Volume Info -->
+<div class="grid grid-cols-2 gap-4 my-5 items-end">
+<div>
+<span class="text-xs font-mono text-slate-400 uppercase tracking-wider block">Ketinggian Air</span>
+<div class="flex items-baseline gap-1 mt-1">
+<span class="font-mono text-4xl lg:text-5xl font-bold tracking-tight text-white" id="level-display">--</span>
+<span class="font-mono text-xl font-semibold text-cyan-400" id="level-unit"></span>
+</div>
+</div>
+<div class="text-right">
+<span class="text-xs font-mono text-slate-400 uppercase tracking-wider block">Volume Terisi</span>
+<div class="font-mono text-xl lg:text-2xl font-bold text-slate-200 mt-1">
+<span id="volume-display" class="">--</span> <span class="text-sm font-normal text-slate-400">/ 1.000 L</span>
+</div>
+<span class="text-xs font-mono text-cyan-400" id="tank-delta-text">Telemetri Realtime</span>
+</div>
+</div>
+</div>
+<!-- 3D Cylindrical Vessel Tank Graphics -->
+<div class="relative w-full h-80 rounded-2xl glass-tank border border-white/10 overflow-hidden flex my-2">
+<!-- Height Scale & Logic Threshold Indicators -->
+<div class="absolute inset-0 flex flex-col justify-between p-3 pointer-events-none z-30 select-none">
+<!-- 100% Top Cap -->
+<div class="flex items-center justify-between text-[11px] font-mono text-slate-400 border-b border-white/5 pb-1">
+<span class="">100% KAPASITAS MAX (2.50m)</span>
+<span class="">1.000 L</span>
+</div>
+<!-- 80% HIGH THRESHOLD LINE -->
+<div class="flex items-center justify-between text-[11px] font-mono text-rose border-b border-rose/30 pb-0.5">
+<div class="flex items-center gap-1.5 font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-rose"></span>
+<span class="">BATAS HIGH &gt; 80% (MOTOR OFF)</span>
+</div>
+<span class="">2.00m</span>
+</div>
+<!-- 50% MID THRESHOLD LINE -->
+<div class="flex items-center justify-between text-[11px] font-mono text-slate-500 border-b border-white/5 border-dashed">
+<span class="">50% NOMINAL BUFFER</span>
+<span class="">1.25m</span>
+</div>
+<!-- 30% LOW THRESHOLD LINE -->
+<div class="flex items-center justify-between text-[11px] font-mono text-emerald border-b border-emerald/40 pb-0.5">
+<div class="flex items-center gap-1.5 font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald"></span>
+<span class="">BATAS LOW &lt; 30% (MOTOR ON)</span>
+</div>
+<span class="">0.75m</span>
+</div>
+<!-- 0% BOTTOM -->
+<div class="flex items-center justify-between text-[11px] font-mono text-slate-500 pt-1">
+<span class="">0% KOSONG</span>
+<span class="">0.00m</span>
+</div>
+</div>
+<!-- Modern Animated Liquid Body -->
+<div class="w-full h-full flex items-end relative z-10">
+<div class="w-full relative transition-all duration-700 ease-out bg-gradient-to-t from-sky-700 via-sky-500 to-cyan-400 shadow-[0_0_30px_rgba(0,240,255,0.4)]" id="tank-liquid-fill" style="height: 50%;">
+<!-- Dynamic Wave Effect Header -->
+<div class="absolute -top-3 left-0 right-0 h-6 overflow-hidden pointer-events-none opacity-80">
+<svg class="w-[200%] h-full wave-animate-fast fill-cyan-300" preserveAspectRatio="none" viewBox="0 0 1200 120">
+<path d="M0,0 C150,90 350,-40 500,30 C650,100 900,-30 1200,40 L1200,120 L0,120 Z"></path>
+</svg>
+</div>
+<div class="absolute -top-2 left-0 right-0 h-5 overflow-hidden pointer-events-none opacity-50">
+<svg class="w-[200%] h-full wave-animate-slow fill-sky-200" preserveAspectRatio="none" viewBox="0 0 1200 120">
+<path d="M0,20 C200,110 400,-20 600,40 C800,90 1000,0 1200,60 L1200,120 L0,120 Z"></path>
+</svg>
+</div>
+<!-- Meniscus Glow Line & Tag -->
+<div class="absolute -top-1 inset-x-0 h-1 bg-white opacity-80 shadow-[0_0_8px_#ffffff]"></div>
+<!-- Floating Indicator Badge on Meniscus -->
+<div class="absolute -top-7 right-4 px-2.5 py-0.5 rounded-md bg-surface-card/90 backdrop-blur-md border border-cyan-400/50 text-cyan-300 font-mono text-xs font-bold shadow-lg">
+<span id="floating-percent" class="">--</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Sub-Metrics Footer -->
+<div class="grid grid-cols-3 gap-3 pt-4 border-t border-surface-border text-center font-mono">
+<div class="p-2.5 rounded-xl bg-surface-elevated/50 border border-surface-border">
+<span class="text-[10px] text-slate-400 block uppercase">Tinggi Fisik</span>
+<span class="text-sm font-semibold text-slate-400" id="height-metric">--</span>
+</div>
+<div class="p-2.5 rounded-xl bg-surface-elevated/50 border border-surface-border">
+<span class="text-[10px] text-slate-400 block uppercase">Suhu Air</span>
+<span class="text-sm font-semibold text-slate-400" id="water-temp-metric">--</span>
+</div>
+<div class="p-2.5 rounded-xl bg-surface-elevated/50 border border-surface-border">
+<span class="text-[10px] text-slate-400 block uppercase">Kekeruhan</span>
+<span class="text-sm font-semibold text-slate-400" id="turbidity-metric">--</span>
+</div>
+</div>
+</section>
+<!-- 2.2 MOTOR PUMP ACTUATOR & LOGIC CARD (Span 6) -->
+<section class="lg:col-span-6 bg-surface-card border border-surface-border/80 rounded-2xl p-6 shadow-2xl flex flex-col justify-between" id="pump-section">
+<div>
+<!-- Header Status -->
+<div class="flex items-center justify-between pb-4 border-b border-surface-border">
+<div class="flex items-center gap-2.5">
+<span class="w-2.5 h-2.5 rounded-full bg-slate-500" id="pump-beacon-dot"></span>
+<h2 class="font-display font-bold text-white text-base tracking-wide">MOTOR POMPA P-01</h2>
+</div>
+<!-- Glowing Status Indicator (Driven strictly by historyData) -->
+<div class="px-3 py-1 rounded-full text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 bg-slate-500/15 text-slate-400 border border-slate-500/30" id="pump-power-badge">
+<span class="material-symbols-outlined" style="font-size: 14px;">sync</span>
+<span id="pump-power-text" class="">MEMUAT STATUS...</span>
+</div>
+</div>
+<!-- Dynamic Visual Pump Graphic + Interactive Toggle -->
+<div class="my-5 p-4 rounded-xl bg-surface-elevated/50 border border-surface-border flex items-center justify-between gap-4">
+<div class="flex items-center gap-4">
+<!-- Visual Pump Wheel / Rotor -->
+<div class="relative w-16 h-16 rounded-2xl bg-surface-card border border-surface-border flex items-center justify-center overflow-hidden shadow-inner">
+<span class="material-symbols-outlined text-slate-500" id="pump-rotor-icon" style="font-size: 34px;">
+                  sync
+                </span>
+<span class="absolute inset-0 rounded-2xl border border-white/5 pointer-events-none"></span>
+</div>
+<div>
+<div class="text-xs font-mono text-slate-400">UNIT SENTRIFUGAL 2.2kW</div>
+<div class="text-base font-semibold text-white" id="pump-action-status">Menghubungkan ke Histori...</div>
+<div class="text-xs text-slate-400 font-mono mt-0.5">Mode Kontrol: <span class="text-emerald font-semibold" id="current-mode-label">MONITORING IOT (SAFETY LOCK)</span></div>
+</div>
+</div>
+<!-- Manual Toggle Button (Locked for Safety) -->
+<button class="px-4 py-2.5 rounded-xl font-mono text-xs font-semibold uppercase tracking-wider bg-slate-800/80 hover:bg-slate-800 text-slate-400 border border-slate-700/60 transition-all flex items-center gap-2 cursor-pointer shadow-sm active:scale-95" id="pump-manual-btn" onclick="showControlLockedNotice('Kontrol Manual Pompa')" title="Kontrol fisik dinonaktifkan (Safety Lock Aktif)">
+<span class="material-symbols-outlined text-amber" style="font-size: 16px;">lock</span>
+<span id="pump-manual-btn-label" class="">KONTROL TERKUNCI</span>
+</button>
+</div>
+<!-- Key Motor Telemetry Grid -->
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 my-4 font-mono">
+<div class="p-3 rounded-xl bg-surface-elevated/40 border border-surface-border">
+<span class="text-[10px] text-slate-400 block uppercase">Laju Alir</span>
+<div class="mt-1">
+<span class="text-xl font-bold text-slate-400" id="pump-flow-val">--</span>
+<span class="text-xs text-slate-500"> L/mnt</span>
+</div>
+</div>
+<div class="p-3 rounded-xl bg-surface-elevated/40 border border-surface-border">
+<span class="text-[10px] text-slate-400 block uppercase">Arus Motor</span>
+<div class="mt-1">
+<span class="text-xl font-bold text-slate-400" id="pump-amp-val">--</span>
+<span class="text-xs text-slate-500"> A</span>
+</div>
+</div>
+<div class="p-3 rounded-xl bg-surface-elevated/40 border border-surface-border">
+<span class="text-[10px] text-slate-400 block uppercase">Tegangan</span>
+<div class="mt-1">
+<span class="text-xl font-bold text-slate-400">--</span>
+<span class="text-xs text-slate-500"> V</span>
+</div>
+</div>
+<div class="p-3 rounded-xl bg-surface-elevated/40 border border-surface-border">
+<span class="text-[10px] text-slate-400 block uppercase">Suhu Mesin</span>
+<div class="mt-1">
+<span class="text-xl font-bold text-slate-400" id="pump-temp-val">--</span>
+<span class="text-xs text-slate-500"> °C</span>
+</div>
+</div>
+</div>
+<!-- Concise PLC Logic Flow Diagram -->
+<div class="space-y-2 mt-4 pt-3 border-t border-surface-border">
+<div class="flex items-center justify-between text-xs font-mono text-slate-400 uppercase tracking-wide">
+<span class="">Diagram Logika Otomasi (Ladder Rule)</span>
+<span class="text-cyan-400">Aktif Real-Time</span>
+</div>
+<!-- 3 Modern Step Cards -->
+<div class="grid grid-cols-1 gap-2 font-mono text-xs">
+<!-- LOW RULE -->
+<div class="p-2.5 rounded-xl bg-surface-elevated/40 border border-surface-border flex items-center justify-between transition-all" id="rule-low">
+<div class="flex items-center gap-2.5">
+<span class="w-2 h-2 rounded-full bg-emerald"></span>
+<span class="text-slate-300"><strong class="text-emerald">Level LOW (Rendah):</strong> Pompa Otomatis <strong>ON</strong> (Mengisi tangki)</span>
+</div>
+<span class="text-[10px] px-2 py-0.5 rounded bg-surface-card text-slate-400" id="badge-rule-low">STANDBY</span>
+</div>
+<!-- MID RULE -->
+<div class="p-2.5 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-between transition-all" id="rule-mid">
+<div class="flex items-center gap-2.5">
+<span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+<span class="text-slate-200"><strong class="text-cyan-300">Level MID (Sedang):</strong> Status Berjalan Normal / Stabil</span>
+</div>
+<span class="text-[10px] px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-semibold" id="badge-rule-mid">STABIL</span>
+</div>
+<!-- HIGH RULE -->
+<div class="p-2.5 rounded-xl bg-surface-elevated/40 border border-surface-border flex items-center justify-between transition-all" id="rule-high">
+<div class="flex items-center gap-2.5">
+<span class="w-2 h-2 rounded-full bg-rose"></span>
+<span class="text-slate-300"><strong class="text-rose">Level HIGH (Tinggi):</strong> Pompa Otomatis <strong>OFF</strong> (Cegah luapan)</span>
+</div>
+<span class="text-[10px] px-2 py-0.5 rounded bg-surface-card text-slate-400" id="badge-rule-high">STANDBY</span>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-4 pt-3 border-t border-surface-border/70 flex items-center justify-between text-xs font-mono text-slate-500">
+<span class="">Relay Coil Adr: 0x4B21</span>
+<span class="text-emerald flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald"></span> Interlock: Terproteksi (Safety Lock Aktif)</span>
+</div>
+</section>
+</div>
+<!-- ======================================================================= -->
+<!-- 3. SENSOR & TELEMETRY SUMMARY CARDS (MINIMALIST & CLEAN)                 -->
+<!-- ======================================================================= -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+<!-- Sensor 1: HC-SR04Pro Ultrasonic -->
+<div class="bg-surface-card border border-surface-border/80 rounded-2xl p-5 shadow-lg flex items-center justify-between">
+<div class="space-y-1">
+<div class="flex items-center gap-2 text-xs font-mono text-slate-400">
+<span class="material-symbols-outlined text-emerald" style="font-size: 18px;">sensors</span>
+<span class="">SENSOR JARAK ULTRASONIK</span>
+</div>
+<div class="text-xl font-bold font-mono text-white"><span id="sensor-distance-val">--</span> <span class="text-xs font-normal text-emerald font-sans" id="sensor-accuracy-tag">(Aktif Realtime)</span></div>
+<div class="text-xs text-slate-400 font-mono">Nilai Level Air (level_air/value)</div>
+</div>
+<div class="h-10 w-24">
+<!-- Sparkline SVG (Rendered directly from historyData values) -->
+<svg class="w-full h-full" viewBox="0 0 100 40">
+<path d="M0,20 L100,20" fill="none" id="sensor-sparkline-path" stroke="#10b981" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path>
+</svg>
+</div>
+</div>
+<!-- Sensor 2: Pipe Pressure Hydrostatic -->
+
+<!-- Sensor 3: Inflow Rate -->
+<div class="bg-surface-card border border-surface-border/80 rounded-2xl p-5 shadow-lg flex items-center justify-between">
+<div class="space-y-1">
+<div class="flex items-center gap-2 text-xs font-mono text-slate-400">
+<span class="material-symbols-outlined text-cyan-400" style="font-size: 18px;">speed</span>
+<span class="">DEBIT ALIRAN MASUK</span>
+</div>
+<div class="text-xl font-bold font-mono text-slate-400" id="flow-sensor-card-val">-- <span class="text-xs font-normal text-slate-500 font-sans">(Tidak Terpasang)</span></div>
+<div class="text-xs text-slate-400 font-mono">Daya Pengisian Pompa Sentrifugal</div>
+</div>
+<div class="h-10 w-24">
+<!-- Sparkline SVG -->
+<svg class="w-full h-full" viewBox="0 0 100 40">
+<path d="M0,20 L100,20" fill="none" opacity="0.4" stroke="#00f0ff" stroke-width="2.5"></path>
+</svg>
+</div>
+</div>
+</div>
+<!-- ======================================================================= -->
+<!-- 4. STREAMLINED ACTIVITY HISTORY TABLE                                   -->
+<!-- ======================================================================= -->
+<section class="bg-surface-card border border-surface-border/80 rounded-2xl p-6 shadow-xl space-y-4" id="history-section"><div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-surface-border"><div class="flex items-start sm:items-center gap-3"><span class="p-2.5 rounded-xl bg-surface-elevated border border-surface-border text-cyan-400 shrink-0"><span class="material-symbols-outlined">history</span></span><div><div class="flex flex-wrap items-center gap-2.5"><h3 class="font-display font-bold text-white text-base">Riwayat Aktivitas &amp; Log Otomasi</h3><span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-medium bg-amber/10 border border-amber/30 text-amber shadow-[0_0_10px_rgba(245,158,11,0.15)]" id="firebase-status-badge"><span class="w-1.5 h-1.5 rounded-full bg-amber animate-pulse" id="firebase-status-dot"></span><span id="firebase-status-text">Firebase Realtime DB: Belum Terkoneksi</span></span></div><p class="text-xs text-slate-400 mt-0.5">Pencatatan real-time perubahan status pompa dan peringatan level air</p></div></div><div class="flex flex-wrap items-center gap-2"><div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-elevated/70 border border-surface-border text-xs font-mono"><span class="material-symbols-outlined text-amber" style="font-size: 16px;">database</span><span class="text-slate-400 text-[11px]">Path:</span><span class="text-cyan-300 text-[11px] font-semibold" id="firebase-path-label">Level_sensor | level_air | historyData</span><span class="text-slate-500">|</span><span class="text-emerald text-[11px]" id="firebase-latency">Live</span></div><button class="px-3 py-1.5 rounded-xl bg-surface-elevated hover:bg-sky-500/15 border border-surface-border hover:border-sky-500/30 text-slate-200 hover:text-sky-300 text-xs font-mono flex items-center gap-1.5 transition-all cursor-pointer shadow-sm" onclick="manualSyncFirebase()" title="Perbarui snapshot sekarang"><span class="material-symbols-outlined text-cyan-400" id="sync-icon" style="font-size: 15px;">sync</span><span class="">Sinkronkan</span></button><div class="flex items-center gap-1 bg-surface-elevated/60 p-1 rounded-xl border border-surface-border text-xs font-mono"><button class="px-2.5 py-1 rounded-lg bg-sky-500/20 text-sky-300 font-semibold transition" id="filter-all" onclick="filterLogs('all')">Semua</button><button class="px-2.5 py-1 rounded-lg text-slate-400 hover:text-white transition" id="filter-pump" onclick="filterLogs('pump')">Pompa</button><button class="px-2.5 py-1 rounded-lg text-slate-400 hover:text-white transition" id="filter-alarm" onclick="filterLogs('alarm')">Alarm</button></div></div></div><div class="flex items-center justify-between px-3 py-2 rounded-xl bg-surface-elevated/40 border border-surface-border/60 text-[11px] font-mono text-slate-400"><div class="flex items-center gap-2"><span class="inline-block w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span><span class="text-slate-300 font-medium">Live Snapshot Listener Aktif</span><span class="text-slate-500">•</span><span class="">Menyinkronkan mutasi otomatis secara real-time via WebSocket</span></div><div class="hidden sm:flex items-center gap-3 text-slate-400"><span class="text-emerald font-semibold" id="auto-sync-status">Auto-Sync: ON</span><span class="text-slate-500">•</span><span id="history-total-count">Memuat Record...</span></div></div><div class="overflow-x-auto"><table class="w-full text-left font-mono text-xs"><thead><tr class="text-slate-400 border-b border-surface-border/60 pb-2"><th class="py-3 px-3 font-medium">DOC / LOG ID</th><th class="py-3 px-3 font-medium">WAKTU (WIB)</th><th class="py-3 px-3 font-medium">TIPE EVENT</th><th class="py-3 px-3 font-medium">DESKRIPSI KEJADIAN</th><th class="py-3 px-3 font-medium">LEVEL AIR</th><th class="py-3 px-3 font-medium text-right">STATUS POMPA</th></tr></thead><tbody class="divide-y divide-surface-border/40" id="log-table-body"><tr><td colspan="6" class="py-6 text-center text-slate-500">Menghubungkan ke Firebase Realtime Database...</td></tr></tbody></table></div></section>
+</main>
+
+<!-- Safety Interlock Toast Notification -->
+<div class="fixed bottom-5 right-5 z-50 max-w-md p-4 rounded-xl bg-surface-card border border-amber/40 shadow-2xl text-xs font-mono text-slate-200 hidden transition-all duration-300 transform translate-y-0" id="safety-toast">
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-amber shrink-0" style="font-size: 22px;">lock</span>
+<div class="space-y-1">
+<div class="font-bold text-amber tracking-wide uppercase flex items-center gap-1.5">
+<span>Safety Lock Aktif</span>
+<span class="text-[10px] px-1.5 py-0.2 rounded bg-amber/20 text-amber font-normal border border-amber/30">Read-Only</span>
+</div>
+<div class="text-slate-300 leading-relaxed" id="safety-toast-message">Kontrol aktuator fisik dinonaktifkan sesuai protokol keselamatan. Perintah tidak dikirim ke perangkat fisik.</div>
+</div>
+<button class="text-slate-400 hover:text-white ml-auto" onclick="hideSafetyToast()">
+<span class="material-symbols-outlined" style="font-size: 16px;">close</span>
+</button>
+</div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- 5. JAVASCRIPT: CLEAN REAL-TIME LOGIC & FIREBASE RTDB INTEGRATION          -->
+<!-- ========================================================================= -->
+<script>
+    // Firebase Web App Configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyD1fbHY5wNBwL2ATDbN-hI6hnNkVkAVdVw",
+      authDomain: "project-monitoring-pompa.firebaseapp.com",
+      databaseURL: "https://project-monitoring-pompa-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "project-monitoring-pompa",
+      storageBucket: "project-monitoring-pompa.firebasestorage.app",
+      messagingSenderId: "362022908243",
+      appId: "1:362022908243:web:bae420a82bc4a8054eb1a6"
+    };
+
+    // Application State
+    let db = null;
+    let currentCondition = null;
+    let currentWaterLevel = null;
+    let rawHistoryData = {};
+    let currentFilter = 'all';
+    let toastTimeout = null;
+
+    // Initialize Firebase SDK
+    try {
+      if (typeof firebase !== 'undefined') {
+        if (!firebase.apps.length) {
+          firebase.initializeApp(firebaseConfig);
+        }
+        db = firebase.database();
+      }
+    } catch (err) {
+      console.warn("Firebase Init notice:", err);
+    }
+
+    // 1. Connection Status Listener (.info/connected)
+    if (db) {
+      const connectedRef = db.ref(".info/connected");
+      connectedRef.on("value", (snap) => {
+        const isConnected = snap.val() === true;
+        updateConnectionUI(isConnected);
+      });
+    } else {
+      updateConnectionUI(false);
+    }
+
+    function updateConnectionUI(isConnected) {
+      const badge = document.getElementById('firebase-status-badge');
+      const dot = document.getElementById('firebase-status-dot');
+      const text = document.getElementById('firebase-status-text');
+      const latency = document.getElementById('firebase-latency');
+
+      if (!badge || !dot || !text) return;
+
+      if (isConnected) {
+        badge.className = "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-medium bg-emerald/10 border border-emerald/30 text-emerald shadow-[0_0_10px_rgba(16,185,129,0.15)]";
+        dot.className = "w-1.5 h-1.5 rounded-full bg-emerald animate-pulse";
+        text.textContent = "Firebase Realtime DB: Connected";
+        if (latency) latency.textContent = "Aktif (Live)";
+      } else {
+        badge.className = "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-medium bg-rose/10 border border-rose/30 text-rose shadow-[0_0_10px_rgba(244,63,94,0.15)]";
+        dot.className = "w-1.5 h-1.5 rounded-full bg-rose";
+        text.textContent = "Firebase Realtime DB: Belum Terkoneksi";
+        if (latency) latency.textContent = "Offline";
+      }
+    }
+
+    // 2. Realtime Listener: Level_sensor/condition
+    if (db) {
+      const conditionRef = db.ref("Level_sensor/condition");
+      conditionRef.on("value", (snap) => {
+        currentCondition = snap.val();
+        updateConditionUI(currentCondition);
+      }, (err) => {
+        console.error("Error reading Level_sensor/condition:", err);
+      });
+    }
+
+    function updateConditionUI(condition) {
+      const tankBadge = document.getElementById('tank-status-badge');
+      if (condition == null) {
+        if (tankBadge) {
+          tankBadge.textContent = "Menunggu Data...";
+          tankBadge.className = "px-3 py-1 rounded-full text-xs font-medium font-mono border bg-slate-500/10 text-slate-400 border-slate-500/30";
+        }
+        return;
+      }
+
+      if (tankBadge) {
+        tankBadge.textContent = `Kondisi: ${condition}`;
+        const condLower = String(condition).toLowerCase();
+        if (condLower.includes('tinggi') || condLower.includes('high')) {
+          tankBadge.className = "px-3 py-1 rounded-full text-xs font-medium font-mono border bg-rose/15 text-rose border-rose/40";
+        } else if (condLower.includes('rendah') || condLower.includes('low')) {
+          tankBadge.className = "px-3 py-1 rounded-full text-xs font-medium font-mono border bg-amber/15 text-amber border-amber/40";
+        } else {
+          tankBadge.className = "px-3 py-1 rounded-full text-xs font-medium font-mono border bg-cyan-500/10 text-cyan-300 border-cyan-500/30";
+        }
+      }
+
+      evaluateLadderRulesByCondition(condition);
+      updateLiquidVisualByCondition(condition);
+    }
+
+    function updateLiquidVisualByCondition(condition) {
+      const tankFill = document.getElementById('tank-liquid-fill');
+      if (!tankFill) return;
+      const condLower = String(condition || '').toLowerCase();
+      if (condLower.includes('tinggi') || condLower.includes('high')) {
+        tankFill.style.height = '85%';
+      } else if (condLower.includes('rendah') || condLower.includes('low')) {
+        tankFill.style.height = '20%';
+      } else if (condLower.includes('sedang') || condLower.includes('mid') || condLower.includes('normal')) {
+        tankFill.style.height = '55%';
+      }
+    }
+
+    // 3. Realtime Listener: level_air/value
+    if (db) {
+      const levelAirRef = db.ref("level_air/value");
+      levelAirRef.on("value", (snap) => {
+        currentWaterLevel = snap.val();
+        updateWaterLevelUI(currentWaterLevel);
+      }, (err) => {
+        console.error("Error reading level_air/value:", err);
+      });
+    }
+
+    function updateWaterLevelUI(val) {
+      const levelDisplay = document.getElementById('level-display');
+      const floatingPercent = document.getElementById('floating-percent');
+      const sensorDistanceVal = document.getElementById('sensor-distance-val');
+      const slider = document.getElementById('level-slider');
+
+      if (val == null) {
+        if (levelDisplay) levelDisplay.textContent = "--";
+        if (floatingPercent) floatingPercent.textContent = "--";
+        if (sensorDistanceVal) sensorDistanceVal.textContent = "--";
+        return;
+      }
+
+      const formatted = typeof val === 'number'
+        ? (Number.isInteger(val) ? val.toString() : val.toFixed(2))
+        : String(val);
+
+      if (levelDisplay) levelDisplay.textContent = formatted;
+      if (floatingPercent) floatingPercent.textContent = formatted;
+      if (sensorDistanceVal) sensorDistanceVal.textContent = formatted;
+      if (slider && typeof val === 'number') {
+        slider.value = Math.min(Math.max(val, 0), 500);
+      }
+    }
+
+    // 4. Realtime Listener: historyData
+    if (db) {
+      const historyRef = db.ref("historyData");
+      historyRef.on("value", (snap) => {
+        rawHistoryData = snap.val() || {};
+        renderHistoryData(rawHistoryData);
+      }, (err) => {
+        console.error("Error reading historyData:", err);
+      });
+    }
+
+    function renderHistoryData(dataObj) {
+      const totalCountEl = document.getElementById('history-total-count');
+
+      const records = Object.entries(dataObj || {}).map(([key, item]) => ({
+        key: key,
+        condition: item && item.condition != null ? String(item.condition) : '-',
+        pump_status: item && item.pump_status != null ? String(item.pump_status).toUpperCase() : '-',
+        timestamp: item && item.timestamp ? Number(item.timestamp) : 0,
+        value: item && item.value != null ? Number(item.value) : null
+      }));
+
+      if (totalCountEl) {
+        totalCountEl.textContent = `Total ${records.length} Record Tercatat`;
+      }
+
+      // Update Pump Status Display strictly from latest history record
+      if (records.length > 0) {
+        const sortedDesc = [...records].sort((a, b) => b.timestamp - a.timestamp);
+        const latest = sortedDesc[0];
+        updatePumpStatusFromHistory(latest.pump_status);
+      } else {
+        updatePumpStatusFromHistory(null);
+      }
+
+      // Render Sparkline from chronological historical values
+      renderSparklineFromHistory(records);
+
+      // Render History Table
+      renderTableRows(records);
+    }
+
+    // 5. Update Pump Status strictly from history data
+    function updatePumpStatusFromHistory(pumpStatus) {
+      const powerBadge = document.getElementById('pump-power-badge');
+      const powerText = document.getElementById('pump-power-text');
+      const beaconDot = document.getElementById('pump-beacon-dot');
+      const rotorIcon = document.getElementById('pump-rotor-icon');
+      const actionStatus = document.getElementById('pump-action-status');
+
+      if (pumpStatus === 'ON') {
+        if (powerBadge) {
+          powerBadge.className = "px-3 py-1 rounded-full text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 bg-emerald/15 text-emerald border border-emerald/30 shadow-[0_0_15px_rgba(16,185,129,0.2)]";
+        }
+        if (powerText) powerText.textContent = "POMPA MENYALA (ON)";
+        if (beaconDot) beaconDot.className = "w-2.5 h-2.5 rounded-full bg-emerald animate-pulse";
+        if (rotorIcon) rotorIcon.className = "material-symbols-outlined text-emerald pump-spinning";
+        if (actionStatus) actionStatus.textContent = "Aktif Beroperasi (Data Telemetri)";
+      } else if (pumpStatus === 'OFF') {
+        if (powerBadge) {
+          powerBadge.className = "px-3 py-1 rounded-full text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 bg-rose/15 text-rose border border-rose/30 shadow-[0_0_15px_rgba(244,63,94,0.15)]";
+        }
+        if (powerText) powerText.textContent = "POMPA STANDBY (OFF)";
+        if (beaconDot) beaconDot.className = "w-2.5 h-2.5 rounded-full bg-slate-500";
+        if (rotorIcon) rotorIcon.className = "material-symbols-outlined text-slate-500";
+        if (actionStatus) actionStatus.textContent = "Aliran Ditutup / Standby";
+      } else {
+        if (powerBadge) {
+          powerBadge.className = "px-3 py-1 rounded-full text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 bg-slate-500/15 text-slate-400 border border-slate-500/30";
+        }
+        if (powerText) powerText.textContent = "STATUS: --";
+        if (beaconDot) beaconDot.className = "w-2.5 h-2.5 rounded-full bg-slate-500";
+        if (rotorIcon) rotorIcon.className = "material-symbols-outlined text-slate-500";
+        if (actionStatus) actionStatus.textContent = "Data Telemetri Belum Tersedia";
+      }
+    }
+
+    // 6. Dynamic Sparkline rendered from actual historical data
+    function renderSparklineFromHistory(records) {
+      const pathEl = document.getElementById('sensor-sparkline-path');
+      if (!pathEl) return;
+
+      const valid = records
+        .filter(r => r.value != null && !isNaN(r.value))
+        .sort((a, b) => a.timestamp - b.timestamp);
+
+      if (valid.length < 2) {
+        pathEl.setAttribute('d', 'M0,20 L100,20');
+        return;
+      }
+
+      const slice = valid.slice(-20);
+      const vals = slice.map(r => r.value);
+      const min = Math.min(...vals);
+      const max = Math.max(...vals);
+      const range = max - min || 1;
+
+      const points = vals.map((v, i) => {
+        const x = (i / (vals.length - 1)) * 100;
+        const y = 35 - ((v - min) / range) * 30;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      });
+
+      pathEl.setAttribute('d', 'M ' + points.join(' L '));
+    }
+
+    // 7. Format Timestamp
+    function formatTimestamp(ts) {
+      if (!ts || isNaN(ts)) return '-';
+      const d = new Date(ts);
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      const h = String(d.getHours()).padStart(2, '0');
+      const m = String(d.getMinutes()).padStart(2, '0');
+      const s = String(d.getSeconds()).padStart(2, '0');
+      return `${day}/${month}/${year} ${h}:${m}:${s}`;
+    }
+
+    // 8. Render Table Rows with sorting and filtering
+    function renderTableRows(records) {
+      const tbody = document.getElementById('log-table-body');
+      if (!tbody) return;
+
+      if (!records || records.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-slate-500">Tidak ada riwayat data di historyData.</td></tr>`;
+        return;
+      }
+
+      const sorted = [...records].sort((a, b) => b.timestamp - a.timestamp);
+
+      const filtered = sorted.filter(r => {
+        if (currentFilter === 'all') return true;
+        if (currentFilter === 'pump') return r.pump_status === 'ON' || r.pump_status === 'OFF';
+        if (currentFilter === 'alarm') {
+          const c = r.condition.toLowerCase();
+          return c.includes('tinggi') || c.includes('high') || c.includes('rendah') || c.includes('low');
+        }
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-slate-500">Tidak ada log untuk filter yang dipilih.</td></tr>`;
+        return;
+      }
+
+      let html = '';
+      filtered.forEach(r => {
+        const condLower = r.condition.toLowerCase();
+        let badgeClass = "bg-sky-500/15 text-sky-300 border-sky-500/30";
+        if (condLower.includes('tinggi') || condLower.includes('high')) {
+          badgeClass = "bg-rose/15 text-rose border-rose/30";
+        } else if (condLower.includes('rendah') || condLower.includes('low')) {
+          badgeClass = "bg-amber/15 text-amber border-amber/30";
+        }
+
+        const pumpBadge = r.pump_status === 'ON'
+          ? '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald/15 text-emerald border border-emerald/30">MENYALA (ON)</span>'
+          : (r.pump_status === 'OFF'
+            ? '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose/10 text-rose border border-rose/30">MATI (OFF)</span>'
+            : `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-500/10 text-slate-400 border border-slate-500/30">${r.pump_status}</span>`);
+
+        const valFormatted = r.value != null
+          ? (Number.isInteger(r.value) ? r.value.toString() : r.value.toFixed(2))
+          : '-';
+
+        const displayKey = r.key.length > 12 ? `#${r.key.slice(-8)}` : `#${r.key}`;
+
+        html += `
+          <tr class="hover:bg-white/[0.02] transition">
+            <td class="py-3 px-3">
+              <div class="flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-amber" style="font-size: 14px;">tag</span>
+                <span class="font-bold text-amber text-[11px]">${displayKey}</span>
+              </div>
+            </td>
+            <td class="py-3 px-3 text-slate-400">${formatTimestamp(r.timestamp)}</td>
+            <td class="py-3 px-3">
+              <span class="px-2 py-0.5 rounded text-[11px] font-semibold border ${badgeClass}">
+                ${r.condition}
+              </span>
+            </td>
+            <td class="py-3 px-3 text-slate-200">Kondisi: ${r.condition} | Level: ${valFormatted} | Pompa: ${r.pump_status}</td>
+            <td class="py-3 px-3 font-bold text-slate-100">${valFormatted}</td>
+            <td class="py-3 px-3 text-right">${pumpBadge}</td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML = html;
+    }
+
+    // 9. Filter Controls
+    function filterLogs(category) {
+      currentFilter = category;
+      const bAll = document.getElementById('filter-all');
+      const bPump = document.getElementById('filter-pump');
+      const bAlarm = document.getElementById('filter-alarm');
+
+      [bAll, bPump, bAlarm].forEach(b => {
+        if (b) b.className = "px-2.5 py-1 rounded-lg text-slate-400 hover:text-white transition";
+      });
+
+      if (category === 'all' && bAll) {
+        bAll.className = "px-2.5 py-1 rounded-lg bg-sky-500/20 text-sky-300 font-semibold transition";
+      } else if (category === 'pump' && bPump) {
+        bPump.className = "px-2.5 py-1 rounded-lg bg-sky-500/20 text-sky-300 font-semibold transition";
+      } else if (category === 'alarm' && bAlarm) {
+        bAlarm.className = "px-2.5 py-1 rounded-lg bg-sky-500/20 text-sky-300 font-semibold transition";
+      }
+
+      renderTableRows(Object.entries(rawHistoryData || {}).map(([key, item]) => ({
+        key: key,
+        condition: item && item.condition != null ? String(item.condition) : '-',
+        pump_status: item && item.pump_status != null ? String(item.pump_status).toUpperCase() : '-',
+        timestamp: item && item.timestamp ? Number(item.timestamp) : 0,
+        value: item && item.value != null ? Number(item.value) : null
+      })));
+    }
+
+    // 10. Ladder Rules Evaluation by Condition
+    function evaluateLadderRulesByCondition(condition) {
+      const ruleLow = document.getElementById('rule-low');
+      const badgeRuleLow = document.getElementById('badge-rule-low');
+      const ruleMid = document.getElementById('rule-mid');
+      const badgeRuleMid = document.getElementById('badge-rule-mid');
+      const ruleHigh = document.getElementById('rule-high');
+      const badgeRuleHigh = document.getElementById('badge-rule-high');
+
+      if (!ruleLow || !ruleMid || !ruleHigh) return;
+
+      ruleLow.className = "p-2.5 rounded-xl bg-surface-elevated/40 border border-surface-border flex items-center justify-between transition-all";
+      badgeRuleLow.textContent = "STANDBY";
+      badgeRuleLow.className = "text-[10px] px-2 py-0.5 rounded bg-surface-card text-slate-400";
+
+      ruleMid.className = "p-2.5 rounded-xl bg-surface-elevated/40 border border-surface-border flex items-center justify-between transition-all";
+      badgeRuleMid.textContent = "STANDBY";
+      badgeRuleMid.className = "text-[10px] px-2 py-0.5 rounded bg-surface-card text-slate-400";
+
+      ruleHigh.className = "p-2.5 rounded-xl bg-surface-elevated/40 border border-surface-border flex items-center justify-between transition-all";
+      badgeRuleHigh.textContent = "STANDBY";
+      badgeRuleHigh.className = "text-[10px] px-2 py-0.5 rounded bg-surface-card text-slate-400";
+
+      const condLower = String(condition || '').toLowerCase();
+      if (condLower.includes('rendah') || condLower.includes('low')) {
+        ruleLow.className = "p-2.5 rounded-xl bg-emerald/15 border border-emerald/40 flex items-center justify-between transition-all shadow-[0_0_15px_rgba(16,185,129,0.15)]";
+        badgeRuleLow.textContent = "TRIGGER AKTIF";
+        badgeRuleLow.className = "text-[10px] px-2 py-0.5 rounded bg-emerald text-surface-card font-bold";
+      } else if (condLower.includes('tinggi') || condLower.includes('high')) {
+        ruleHigh.className = "p-2.5 rounded-xl bg-rose/15 border border-rose/40 flex items-center justify-between transition-all shadow-[0_0_15px_rgba(244,63,94,0.15)]";
+        badgeRuleHigh.textContent = "TRIGGER AKTIF";
+        badgeRuleHigh.className = "text-[10px] px-2 py-0.5 rounded bg-rose text-white font-bold";
+      } else if (condLower.includes('sedang') || condLower.includes('mid') || condLower.includes('normal')) {
+        ruleMid.className = "p-2.5 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-between transition-all";
+        badgeRuleMid.textContent = "STABIL";
+        badgeRuleMid.className = "text-[10px] px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-semibold";
+      }
+    }
+
+    // 11. Safety Interlock Notice (Prevents Any Write / Physical Command)
+    function showControlLockedNotice(actionName) {
+      const toast = document.getElementById('safety-toast');
+      const msg = document.getElementById('safety-toast-message');
+      if (toast && msg) {
+        msg.textContent = `Aksi "${actionName}" ditahan. Seluruh kontrol aktuator fisik dinonaktifkan sesuai protokol keselamatan PLC (Safety Interlock). Tidak ada data atau perintah yang dikirim.`;
+        toast.classList.remove('hidden');
+        clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => {
+          toast.classList.add('hidden');
+        }, 4500);
+      }
+    }
+
+    function hideSafetyToast() {
+      const toast = document.getElementById('safety-toast');
+      if (toast) toast.classList.add('hidden');
+    }
+
+    // 12. Manual Snapshot Refresh
+    function manualSyncFirebase() {
+      const icon = document.getElementById('sync-icon');
+      if (icon) icon.classList.add('animate-spin');
+      if (db) {
+        Promise.all([
+          db.ref("Level_sensor/condition").once('value'),
+          db.ref("level_air/value").once('value'),
+          db.ref("historyData").once('value')
+        ]).then(([condSnap, levelSnap, histSnap]) => {
+          updateConditionUI(condSnap.val());
+          updateWaterLevelUI(levelSnap.val());
+          renderHistoryData(histSnap.val() || {});
+          if (icon) icon.classList.remove('animate-spin');
+        }).catch(err => {
+          console.error("Manual sync error:", err);
+          if (icon) icon.classList.remove('animate-spin');
+        });
+      } else {
+        if (icon) icon.classList.remove('animate-spin');
+      }
+    }
+
+    // Smooth Scroll Helper
+    function scrollToSection(sectionId) {
+      const el = document.getElementById(sectionId);
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }
+  </script>
+</body></html>
